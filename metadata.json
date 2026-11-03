@@ -1,0 +1,8 @@
+{
+  "name": "Lykke IA Bienestar Psicología",
+  "description": "Asesoría en psicología, diario emocional seguro encriptado, gamificación, música de piano y naturaleza, chat de desahogo y consultas profesionales.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

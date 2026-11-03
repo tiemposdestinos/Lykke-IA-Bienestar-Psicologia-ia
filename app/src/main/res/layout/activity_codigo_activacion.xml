@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0F172A"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp"
+        android:gravity="center_horizontal">
+
+        <!-- Barra Superior con Botón Volver -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="24dp">
+
+            <Button
+                android:id="@+id/btnVolverCodigo"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:text="← Volver"
+                android:textColor="#FFD54F"
+                android:backgroundTint="#1E293B"
+                android:textSize="13sp" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Activación de Membresía"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:gravity="end" />
+        </LinearLayout>
+
+        <!-- Tarjeta Central de Validación (Marco en Azul Platinado) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card_azul_platinado"
+            android:padding="24dp"
+            android:gravity="center_horizontal"
+            android:layout_marginBottom="24dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔑"
+                android:textSize="36sp"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Canjear Clave de Activación"
+                android:textColor="#4ADE80"
+                android:textSize="19sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Ingresa a continuación tu código llave recibido por correo para habilitar de manera permanente el acceso ilimitado al Diario Seguro y Chat de Desahogo."
+                android:textColor="#D1D5DB"
+                android:textSize="13sp"
+                android:lineSpacingExtra="4dp"
+                android:gravity="center"
+                android:layout_marginBottom="22dp" />
+
+            <!-- Campo EditText para el código -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Código Llave de Acceso"
+                android:textColor="#FFD54F"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="6dp" />
+
+            <EditText
+                android:id="@+id/etCodigoActivacion"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:hint="••••-••••-••••"
+                android:textColorHint="#6B7280"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:background="@drawable/bg_edittext_codigo"
+                android:inputType="textCapCharacters|textNoSuggestions"
+                android:importantForAutofill="no"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:layout_marginBottom="14dp" />
+
+            <!-- Mensaje de Resultado (Error o Éxito) -->
+            <TextView
+                android:id="@+id/tvMensajeResultado"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_marginBottom="14dp" />
+
+            <!-- Botón de Validación -->
+            <Button
+                android:id="@+id/btnValidarCodigo"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:text="✓ Validar y Activar Membresía"
+                android:textColor="#0D1F1D"
+                android:backgroundTint="#FFD54F"
+                android:textStyle="bold"
+                android:textSize="14sp"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔒 Claves únicas y confidenciales de acceso seguro."
+                android:textColor="#9CA3AF"
+                android:textSize="11sp"
+                android:gravity="center" />
+        </LinearLayout>
+
+        <!-- Pie de página con Logo Pequeño LivsForm Lykke (Marco en Azul Platinado) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:background="@drawable/bg_card_azul_platinado"
+            android:padding="16dp"
+            android:layout_marginBottom="20dp">
+
+            <ImageView
+                android:id="@+id/ivLogoLivsformCodigo"
+                android:layout_width="wrap_content"
+                android:layout_height="64dp"
+                android:adjustViewBounds="true"
+                android:src="@drawable/ic_livsform_logo"
+                android:contentDescription="Logo LivsForm Lykke"
+                android:background="#FFFFFF"
+                android:padding="6dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="LivsForm Lykke"
+                android:textColor="#FFD54F"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:layout_marginTop="8dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Asesorías Consultorias psicología"
+                android:textColor="#4ADE80"
+                android:textSize="11sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="soporte / claves: tiemposdestinos@gmail.com"
+                android:textColor="#9CA3AF"
+                android:textSize="10sp"
+                android:layout_marginTop="2dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

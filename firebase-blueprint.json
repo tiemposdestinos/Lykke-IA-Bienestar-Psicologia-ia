@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Perfil de cuenta personal y segura de usuario en Asesorías Consultorias psicología, sincronizado para supervisión clínica hacia tiemposdestinos@gmail.com sin requerir edad ni género.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID del usuario"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Nombre o alias elegido por el usuario (sin requerir edad ni género)"
+        },
+        "email": {
+          "type": "string",
+          "description": "Correo electrónico de la cuenta"
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "URL opcional de foto de perfil"
+        },
+        "adminNotificationEmail": {
+          "type": "string",
+          "description": "Correo de destino para la base de datos de cuentas: tiemposdestinos@gmail.com"
+        },
+        "syncStatus": {
+          "type": "string",
+          "description": "Estado de sincronización y notificación clínica"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Fecha y hora de creación de la cuenta (FieldValue.serverTimestamp)"
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Fecha y hora de último acceso"
+        }
+      },
+      "required": [
+        "userId",
+        "displayName",
+        "email",
+        "adminNotificationEmail",
+        "syncStatus",
+        "createdAt",
+        "lastLoginAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Colección de cuentas de usuario personales aisladas por UID"
+    }
+  }
+}

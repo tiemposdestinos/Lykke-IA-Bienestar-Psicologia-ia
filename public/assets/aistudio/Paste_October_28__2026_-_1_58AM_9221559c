@@ -1,0 +1,755 @@
+
+
+package com.tuapp.ecosistema
+
+import android.Manifest
+import android.app.Dialog
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.view.ViewGroup
+import android.view.Window
+import android.view.animation.AnticipateOvershootInterpolator
+import android.widget.*
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import androidx.core.widget.doAfterTextChanged
+import androidx.lifecycle.lifecycleScope
+import androidx.room.*
+import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.work.*
+import com.google.ai.client.generativeai.GenerativeModel
+import com.google.mlkit.common.model.DownloadConditions
+import com.google.mlkit.nl.translate.TranslateLanguage
+import com.google.mlkit.nl.translate.Translation
+import com.google.mlkit.nl.translate.Translator
+import com.google.mlkit.nl.translate.TranslatorOptions
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.tasks.await
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.Locale
+import java.util.concurrent.TimeUnit
+
+// ============================================================================
+// 1. ENTIDADES Y BASE DE DATOS ROOM
+// ============================================================================
+
+@Entity(tableName = "lecturas_familia")
+data class LecturaFamiliaEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val categoria: String,
+    val titulo: String,
+    val contenido: String
+)
+
+@Entity(tableName = "tareas_rutina")
+data class TareaEntity(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val descripcion: String,
+    val completada: Boolean = false,
+    val fechaCreacion: Long = System.currentTimeMillis()
+)
+
+@Dao
+interface LecturaFamiliaDao {
+    @Query("SELECT * FROM lecturas_familia")
+    suspend fun obtenerTodas(): List<LecturaFamiliaEntity>
+
+    @Query("SELECT * FROM lecturas_familia WHERE categoria = :cat LIMIT 1")
+    suspend fun obtenerPorCategoria(cat: String): LecturaFamiliaEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertarTodas(lecturas: List<LecturaFamiliaEntity>)
+}
+
+@Dao
+interface TareaDao {
+    @Query("SELECT * FROM tareas_rutina WHERE completada = 0 ORDER BY id DESC")
+    suspend fun obtenerTareasPendientes(): List<TareaEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertarTarea(tarea: TareaEntity)
+
+    @Query("UPDATE tareas_rutina SET completada = 1 WHERE id = :tareaId")
+    suspend fun marcarComoCompletada(tareaId: Int)
+}
+
+object LecturasSeed {
+    fun obtenerLecturasIniciales(): List<LecturaFamiliaEntity> = listOf(
+        LecturaFamiliaEntity(
+            categoria = "FAMILIA_PERDON",
+            titulo = "El Refugio Sagrado y la Fuerza del Perdón",
+            contenido = "La familia es el único puerto donde se nos ama por lo que somos y no por lo que tenemos o logramos. En ningún otro lugar del mundo encontramos raíces tan profundas. El perdón dentro del hogar no significa justificar el error, sino negarse a que el rencor destruya el lazo sagrado de la sangre. Una familia fuerte no es aquella donde nunca hay desacuerdos, sino aquella donde el orgullo se arrodilla ante el amor. Perdonar a un padre, a una madre o a un hermano libera el alma y sana generaciones enteras."
+        ),
+        LecturaFamiliaEntity(
+            categoria = "ROL_PADRE",
+            titulo = "La Huella Inolvidable de la Paternidad",
+            contenido = "El padre cumple una función irremplazable en el diseño de la vida familiar. Su rol representa el pilar de firmeza, el escudo protector y la voz que enseña al hijo a enfrentarse al mundo con coraje, orden y responsabilidad. Aunque una mujer es capaz de brindar un sacrificio y amor infinitos, la figura paterna aporta una energía particular que complementa la vida del hogar: enseña el valor del esfuerzo silencioso, el deber cumplido y el marco de seguridad donde los hijos descubren su propia fortaleza. Su presencia constante es una guía que nadie más puede suplir de la misma manera."
+        ),
+        LecturaFamiliaEntity(
+            categoria = "ROL_MADRE",
+            titulo = "El Vientre del Afecto y la Sabiduría Maternal",
+            contenido = "La madre posee un don que el hombre jamás podrá igualar: ella no solo gesta la vida en sus entrañas, sino que es el corazón emocional y espiritual del hogar. Su conexión con los hijos nace de una intuición profunda y un amor incondicional que sostiene a la familia en sus horas más oscuras. La madre enseña la compasión y la ternura nutricia que sana las angustias del alma. El hombre puede proveer y proteger, pero solo la madre envuelve el hogar con esa ternura que forja la seguridad emocional de los hijos para siempre."
+        ),
+        LecturaFamiliaEntity(
+            categoria = "HERMANDAD",
+            titulo = "Hermanos Unidos: La Sangre Vale Más que la Tierra",
+            contenido = "Los hermanos son los compañeros de viaje que Dios nos dio para caminar juntos desde el amanecer hasta el anochecer de la vida. El mayor error que un ser humano puede cometer es permitir que las propiedades, las herencias o el dinero abran una brecha de enemistad entre hermanos. La tierra se queda en la tierra; las casas envejecen y las monedas cambian de dueño; pero un hermano es un pedazo de tu propia carne. Jamás permitas que un pedazo de tierra destruya un abrazo de sangre. Apóyense para crecer juntos."
+        )
+    )
+}
+
+@Database(entities = [LecturaFamiliaEntity::class, TareaEntity::class], version = 1, exportSchema = false)
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun lecturaFamiliaDao(): LecturaFamiliaDao
+    abstract fun tareaDao(): TareaDao
+
+    companion object {
+        @Volatile private var INSTANCE: AppDatabase? = null
+
+        fun getDatabase(context: Context, scope: CoroutineScope): AppDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = Room.databaseBuilder(
+                    context.applicationContext,
+                    AppDatabase::class.java,
+                    "app_familiar_database"
+                ).addCallback(object : Callback() {
+                    override fun onCreate(db: SupportSQLiteDatabase) {
+                        super.onCreate(db)
+                        INSTANCE?.let { database ->
+                            scope.launch(Dispatchers.IO) {
+                                database.lecturaFamiliaDao().insertarTodas(LecturasSeed.obtenerLecturasIniciales())
+                            }
+                        }
+                    }
+                }).build()
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
+}
+
+// ============================================================================
+// 2. PREFERENCIAS PERSISTENTES Y AUTO-REGALOS
+// ============================================================================
+
+class PreferenciasPersistentes(context: Context) {
+    private val prefs: SharedPreferences = context.getSharedPreferences("app_preferencias_blindadas", Context.MODE_PRIVATE)
+
+    var nombreIA: String
+        get() = prefs.getString("KEY_NOMBRE_IA", "Guardián") ?: "Guardián"
+        set(value) = prefs.edit().putString("KEY_NOMBRE_IA", value).apply()
+
+    var nombreUsuario: String
+        get() = prefs.getString("KEY_NOMBRE_USUARIO", "") ?: ""
+        set(value) = prefs.edit().putString("KEY_NOMBRE_USUARIO", value).apply()
+
+    var contadorRegalos: Int
+        get() = prefs.getInt("KEY_TOTAL_REGALOS", 0)
+        set(value) = prefs.edit().putInt("KEY_TOTAL_REGALOS", value).apply()
+
+    fun incrementarRegalo(): Int {
+        val total = contadorRegalos + 1
+        contadorRegalos = total
+        return total
+    }
+}
+
+// ============================================================================
+// 3. GEOLOCALIZACIÓN Y SENSACIÓN TÉRMICA POR IP
+// ============================================================================
+
+@Serializable
+data class IpInfo(
+    val success: Boolean = false,
+    val city: String = "Ubicación detectada",
+    val country: String = "",
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0
+)
+
+@Serializable
+data class OpenMeteoResponse(val current: CurrentClima? = null)
+
+@Serializable
+data class CurrentClima(val apparent_temperature: Double = 0.0)
+
+object ClimaPorIpService {
+    private val client = HttpClient(CIO) {
+        install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; isLenient = true }) }
+    }
+
+    suspend fun obtenerSensacionTermica(): String = withContext(Dispatchers.IO) {
+        try {
+            val ipInfo: IpInfo = client.get("https://ipwho.is/").body()
+            if (!ipInfo.success || ipInfo.latitude == 0.0) return@withContext "Ubicación actual no disponible."
+
+            val url = "https://api.open-meteo.com/v1/forecast?latitude=${ipInfo.latitude}&longitude=${ipInfo.longitude}&current=apparent_temperature"
+            val climaResponse: OpenMeteoResponse = client.get(url).body()
+            val sensacion = climaResponse.current?.apparent_temperature
+
+            if (sensacion != null) {
+                "En ${ipInfo.city}, ${ipInfo.country} la sensación térmica es de ${sensacion}°C."
+            } else {
+                "Ciudad: ${ipInfo.city}. Sensación térmica no calculable."
+            }
+        } catch (e: Exception) {
+            "Sensación térmica: 22°C (Modo aproximado de red)."
+        }
+    }
+}
+
+// ============================================================================
+// 4. TRADUCTOR UNIVERSAL HÍBRIDO (ML KIT + GEMINI + CACHÉ)
+// ============================================================================
+
+enum class IdiomaDestino(val codigo: String, val nombreDisplay: String, val esOffline: Boolean) {
+    ESPANOL("es", "Español", true),
+    CHINO_MANDARIN("zh", "中文 (Mandarín)", true),
+    RUSO("ru", "Русский (Ruso)", true),
+    DANES("da", "Dansk (Danés)", true),
+    MAYA_KICHE("quc", "K'iche'", false),
+    MAYA_QEQCHI("kek", "Q'eqchi'", false),
+    MAYA_KAQCHIKEL("cak", "Kaqchikel", false),
+    GARIFUNA("cab", "Garífuna", false)
+}
+
+object TraductorUniversalManager {
+    private var geminiModel: GenerativeModel? = null
+    private val cacheTraducciones = mutableMapOf<String, String>()
+    private var translatorActual: Translator? = null
+    private var idiomaActualMLKit: String? = null
+
+    fun inicializar(geminiApiKey: String) {
+        geminiModel = GenerativeModel(modelName = "gemini-1.5-flash", apiKey = geminiApiKey)
+    }
+
+    suspend fun traducir(texto: String, idioma: IdiomaDestino): String = withContext(Dispatchers.IO) {
+        if (texto.isBlank() || idioma == IdiomaDestino.ESPANOL) return@withContext texto
+        val clave = "${idioma.codigo}_$texto"
+        cacheTraducciones[clave]?.let { return@withContext it }
+
+        val res = if (idioma.esOffline) {
+            traducirOfflineMLKit(texto, idioma)
+        } else {
+            traducirOnlineGemini(texto, idioma)
+        }
+        cacheTraducciones[clave] = res
+        return@withContext res
+    }
+
+    private suspend fun traducirOfflineMLKit(texto: String, idioma: IdiomaDestino): String {
+        return try {
+            val target = when (idioma) {
+                IdiomaDestino.CHINO_MANDARIN -> TranslateLanguage.CHINESE
+                IdiomaDestino.RUSO -> TranslateLanguage.RUSSIAN
+                IdiomaDestino.DANES -> TranslateLanguage.DANISH
+                else -> TranslateLanguage.ENGLISH
+            }
+
+            if (translatorActual == null || idiomaActualMLKit != target) {
+                translatorActual?.close()
+                val options = TranslatorOptions.Builder()
+                    .setSourceLanguage(TranslateLanguage.SPANISH)
+                    .setTargetLanguage(target)
+                    .build()
+                translatorActual = Translation.getClient(options)
+                idiomaActualMLKit = target
+                translatorActual?.downloadModelIfNeeded(DownloadConditions.Builder().build())?.await()
+            }
+            translatorActual?.translate(texto)?.await() ?: texto
+        } catch (e: Exception) {
+            texto
+        }
+    }
+
+    private suspend fun traducirOnlineGemini(texto: String, idioma: IdiomaDestino): String {
+        return try {
+            val prompt = "Traduce del español al idioma originario ${idioma.nombreDisplay} de forma natural, sin notas ni comillas:\n$texto"
+            geminiModel?.generateContent(prompt)?.text?.trim() ?: texto
+        } catch (e: Exception) {
+            texto
+        }
+    }
+}
+
+// ============================================================================
+// 5. CLIENTE BAIDU SEARCH CON OAUTH Y CACHÉ
+// ============================================================================
+
+@Serializable
+data class BaiduTokenResponse(val access_token: String? = null)
+
+class BaiduSearchClient(private val apiKey: String, private val secretKey: String) {
+    private val client = HttpClient(CIO) {
+        install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; isLenient = true }) }
+    }
+    private var tokenCached: String? = null
+
+    private suspend fun getAccessToken(): String {
+        tokenCached?.let { return it }
+        val oauthUrl = "https://aip.baidubce.com/oauth/2.0/token"
+        val resp: BaiduTokenResponse = client.get(oauthUrl) {
+            parameter("grant_type", "client_credentials")
+            parameter("client_id", apiKey)
+            parameter("client_secret", secretKey)
+        }.body()
+        return resp.access_token?.also { tokenCached = it } ?: throw IllegalStateException("Token no generado")
+    }
+
+    suspend fun search(query: String): String = withContext(Dispatchers.IO) {
+        try {
+            val token = getAccessToken()
+            val url = "https://qianfan.baidubce.com/v2/ai_search/chat/completions"
+            val payload = JSONObject().apply {
+                put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", query)))
+                put("stream", false)
+            }
+            val res: HttpResponse = client.post(url) {
+                parameter("access_token", token)
+                contentType(ContentType.Application.Json)
+                setBody(payload.toString())
+            }
+            res.bodyAsText()
+        } catch (e: Exception) {
+            "Error en búsqueda Baidu: ${e.message}"
+        }
+    }
+}
+
+// ============================================================================
+// 6. ADMINISTRADOR DE VOZ ROBUSTO (NO SE TRABA EN ROJO)
+// ============================================================================
+
+class VozManager(
+    private val context: Context,
+    private val iconoMic: ImageView,
+    private val onTextoEscuchado: (String) -> Unit
+) {
+    private var speechRecognizer: SpeechRecognizer? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    init {
+        mainHandler.post {
+            if (SpeechRecognizer.isRecognitionAvailable(context)) {
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
+                    setRecognitionListener(crearListener())
+                }
+            }
+        }
+    }
+
+    fun empezarAEscuchar() {
+        mainHandler.post {
+            try {
+                iconoMic.setColorFilter(Color.parseColor("#4CAF50")) // Verde: Escuchando
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                }
+                speechRecognizer?.startListening(intent)
+            } catch (e: Exception) {
+                resetearMic()
+            }
+        }
+    }
+
+    fun resetearMic() {
+        iconoMic.setColorFilter(Color.parseColor("#757575")) // Reposo
+    }
+
+    private fun crearListener() = object : RecognitionListener {
+        override fun onResults(results: Bundle?) {
+            val match = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()
+            if (!match.isNullOrBlank()) onTextoEscuchado(match)
+            resetearMic()
+        }
+
+        override fun onError(error: Int) {
+            iconoMic.setColorFilter(Color.parseColor("#E53935")) // Rojo transitorio
+            mainHandler.postDelayed({ resetearMic() }, 600)
+        }
+
+        override fun onReadyForSpeech(params: Bundle?) {}
+        override fun onBeginningOfSpeech() {}
+        override fun onRmsChanged(rmsdB: Float) {}
+        override fun onBufferReceived(buffer: ByteArray?) {}
+        override fun onEndOfSpeech() { resetearMic() }
+        override fun onPartialResults(partialResults: Bundle?) {}
+        override fun onEvent(eventType: Int, params: Bundle?) {}
+    }
+
+    fun destruir() { speechRecognizer?.destroy() }
+}
+
+// ============================================================================
+// 7. BANCOS DE CÁPSULAS Y TERAPIAS EMOCIONALES
+// ============================================================================
+
+data class CapsulaEducativa(val categoria: String, val titulo: String, val contenido: String)
+data class EjercicioTerapia(val titulo: String, val pasoAPaso: String)
+
+object BancoDeCapsulas {
+    val todas = listOf(
+        CapsulaEducativa("Química Cotidiana", "¿Por qué el jabón corta la grasa?", "El agua y el aceite nunca se mezclan solos. El jabón actúa como puente: tiene una cabeza que ama el agua y una cola que se une al aceite. Al lavarte, atrapa la suciedad con su cola y se va arrastrado por el chorro de agua."),
+        CapsulaEducativa("Comida Callejera del Mundo", "Mofongo Caribeño y Pinchos Españoles", "En Puerto Rico y el Caribe se disfruta el Mofongo: plátano verde frito majado con ajo y chicharrón. En España, los pinchos morunos a la brasa y la tortilla jugosa reinan en cada rincón de tapeo."),
+        CapsulaEducativa("Gastronomía de Asia", "Takoyaki de Japón", "En las calles de Osaka se sirven bolitas de masa dorada rellenas de pulpo fresco, bañadas con salsa dulce, alga nori y copos de pescado que se mueven con el calor del plato."),
+        CapsulaEducativa("Sabiduría Bíblica", "Deuteronomio 31:8 y Tobías 4:7", "«El Señor mismo marchará al frente de ti; nunca te dejará ni te abandonará» (Deut 31:8). Y Tobías enseña: «Da limosna de tus bienes y no desvíes los ojos ante el necesitado, para que Dios no desvíe sus ojos de ti»."),
+        CapsulaEducativa("Pensamiento Universal", "El Corán y la Voluntad", "«Dios no cambia la condición de un pueblo mientras las personas no transformen lo que guardan en su propio corazón y acciones» (Sura 13:11)."),
+        CapsulaEducativa("Supervivencia y Salud", "Filtro Natural de Agua", "Para limpiar agua turbia en emergencias, corta una botella: pon capas de algodón, carbón vegetal molido (el gran purificador), arena fina y piedras. Pasa el agua y hiérvela 3 minutos antes de tomarla."),
+        CapsulaEducativa("Astronomía", "Las Tres Marías y el Cazador", "Las tres estrellas del cinturón de Orión (Alnitak, Alnilam y Mintaka) están a más de 1.200 años luz y han servido como brújula natural para viajeros desde tiempos inmemoriales.")
+    )
+}
+
+object BancoDeTerapias {
+    val todas = listOf(
+        EjercicioTerapia("Desarmar la Culpa en Papel", "Escribe en un trozo de papel aquello que te pesa o esa culpa que llevas cargando. Léelo despacio una vez. Rómpelo en cuatro pedazos diciendo con firmeza: «Esto pertenece al pasado, no me define hoy y decido soltarlo». Respira hondo."),
+        EjercicioTerapia("Respiración Cuadrada (Desatar el Pecho)", "Si sientes un nudo interno: Inhala por la nariz en 4 segundos. Mantén el aire 7 segundos. Exhala con silbido suave por la boca en 8 segundos. Repite 4 veces seguidas y siente tu mente desacelerar."),
+        EjercicioTerapia("Reconocimiento Frente al Espejo", "Mírate fijamente a los ojos en el espejo por un minuto entero. Sonríe con calma y di en voz alta: «Gracias por tu resistencia. Eres una persona digna y hoy decido tratarte con amor».")
+    )
+}
+
+object ClaveRecordatorioManager {
+    fun obtenerInstruccion(): String = when (Locale.getDefault().language.lowercase()) {
+        "en" -> "To set a task, say: 'Note' followed by your activity."
+        "fr" -> "Pour enregistrer une tâche, dites: «Note»."
+        "ru" -> "Чтобы сохранить задачу, скажите: «Заметка»."
+        "zh" -> "要记录任务，请说：“记录”。"
+        else -> "Para guardar una tarea, escribe o di: «Anota» seguido de tu actividad."
+    }
+}
+
+// ============================================================================
+// 8. TRABAJADORES PERIÓDICOS (WORKMANAGER)
+// ============================================================================
+
+class RutinaYClimaWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        val clima = ClimaPorIpService.obtenerSensacionTermica()
+        val db = AppDatabase.getDatabase(applicationContext, this)
+        val tareas = db.tareaDao().obtenerTareasPendientes()
+
+        val textoTareas = if (tareas.isNotEmpty()) {
+            "\n\nActividades pendientes:\n" + tareas.take(4).joinToString("\n") { "• ${it.descripcion}" }
+        } else {
+            "\n\n¡Rutina al día! Sin tareas pendientes."
+        }
+
+        lanzarNotificacion(applicationContext, "canal_5h", "Reporte Periódico (Cada 5 horas)", "$clima$textoTareas", 2001)
+        Result.success()
+    }
+}
+
+class CapsulasWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        val capsula = BancoDeCapsulas.todas.random()
+        lanzarNotificacion(applicationContext, "canal_4h", "💡 ${capsula.categoria}: ${capsula.titulo}", capsula.contenido, 3001)
+        Result.success()
+    }
+}
+
+class TerapiasWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        val terapia = BancoDeTerapias.todas.random()
+        lanzarNotificacion(applicationContext, "canal_3d", "🌿 Momento de Paz: ${terapia.titulo}", terapia.pasoAPaso, 4001)
+        Result.success()
+    }
+}
+
+fun lanzarNotificacion(context: Context, channelId: String, titulo: String, cuerpo: String, id: Int) {
+    val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        manager.createNotificationChannel(NotificationChannel(channelId, "Notificaciones de la App", NotificationManager.IMPORTANCE_DEFAULT))
+    }
+    val notif = NotificationCompat.Builder(context, channelId)
+        .setSmallIcon(android.R.drawable.ic_dialog_info)
+        .setContentTitle(titulo)
+        .setStyle(NotificationCompat.BigTextStyle().bigText(cuerpo))
+        .setAutoCancel(true)
+        .build()
+    manager.notify(id, notif)
+}
+
+// ============================================================================
+// 9. DIÁLOGO EXPANSIVO DE REGALOS (AMOR PROPIO)
+// ============================================================================
+
+class RegaloAmorPropioDialog(context: Context, private val prefs: PreferenciasPersistentes) : Dialog(context) {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        requestWindowFeature(Window.FEATURE_NO_TITLE)
+        window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+
+        val layout = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(40, 40, 40, 40)
+            setBackgroundColor(Color.parseColor("#E6FFFFFF")) // Translúcido
+            gravity = android.view.Gravity.CENTER
+        }
+
+        val totalRegalos = prefs.incrementarRegalo()
+
+        val txtTitulo = TextView(context).apply {
+            text = "🎁 Regalo para el Alma"
+            textSize = 22f
+            setTextColor(Color.parseColor("#B8860B"))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+
+        val txtMensaje = TextView(context).apply {
+            text = "Eres una persona infinitamente valiosa por tu propia naturaleza.\n\nMírate al espejo y dite con convicción:\n\n«Me amo y lo merezco»."
+            textSize = 17f
+            setTextColor(Color.parseColor("#1A1A1A"))
+            setPadding(0, 24, 0, 24)
+            gravity = android.view.Gravity.CENTER
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+
+        val txtContador = TextView(context).apply {
+            text = "Te has otorgado $totalRegalos detalles de amor propio"
+            textSize = 14f
+            setTextColor(Color.parseColor("#4A148C"))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+
+        val btnCerrar = Button(context).apply {
+            text = "Lo recibo con gratitud"
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.parseColor("#B8860B"))
+            setOnClickListener { dismiss() }
+        }
+
+        layout.addView(txtTitulo)
+        layout.addView(txtMensaje)
+        layout.addView(txtContador)
+        layout.addView(btnCerrar)
+        setContentView(layout)
+
+        // Animación de desfragmentación / expansión en grande
+        layout.scaleX = 0.2f
+        layout.scaleY = 0.2f
+        layout.alpha = 0f
+        layout.animate()
+            .scaleX(1f)
+            .scaleY(1f)
+            .alpha(1f)
+            .setInterpolator(AnticipateOvershootInterpolator(1.2f))
+            .setDuration(500)
+            .start()
+    }
+}
+
+// ============================================================================
+// 10. ACTIVIDAD PRINCIPAL (INTEGRACIÓN TOTAL DE ELEMENTOS)
+// ============================================================================
+
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var prefs: PreferenciasPersistentes
+    private lateinit var vozManager: VozManager
+    private lateinit var db: AppDatabase
+    private val baiduClient = BaiduSearchClient("TU_BAIDU_AK", "TU_BAIDU_SK")
+
+    // Vistas principales
+    private lateinit var edtNombreIA: EditText
+    private lateinit var edtNombreUsuario: EditText
+    private lateinit var edtTarea: EditText
+    private lateinit var btnMicrofono: ImageView
+    private lateinit var txtConsola: TextView
+    private lateinit var btnRegalo: Button
+    private lateinit var btnLecturas: Button
+    private lateinit var btnBuscador: Button
+
+    private val requestPermisos = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { perms ->
+        if (perms[Manifest.permission.RECORD_AUDIO] != true) {
+            Toast.makeText(this, "Permiso de micrófono requerido para dictar", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        prefs = PreferenciasPersistentes(this)
+        db = AppDatabase.getDatabase(this, lifecycleScope)
+        TraductorUniversalManager.inicializar("TU_GEMINI_API_KEY")
+
+        // Solicitar permisos de audio y notificaciones
+        val permisos = mutableListOf(Manifest.permission.RECORD_AUDIO)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permisos.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        requestPermisos.launch(permisos.toTypedArray())
+
+        // Construcción de interfaz translúcida (Marca de Agua) en código
+        val rootLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(32, 48, 32, 32)
+            setBackgroundColor(Color.parseColor("#15000000")) // Fondo marca de agua muy suave
+        }
+
+        edtNombreIA = EditText(this).apply {
+            hint = "Nombre de la IA"
+            setText(prefs.nombreIA)
+            setTextColor(Color.parseColor("#1A1A1A"))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            doAfterTextChanged { prefs.nombreIA = it.toString() }
+        }
+
+        edtNombreUsuario = EditText(this).apply {
+            hint = "¿Cómo deseas que te llame?"
+            setText(prefs.nombreUsuario)
+            setTextColor(Color.parseColor("#1A1A1A"))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            doAfterTextChanged { prefs.nombreUsuario = it.toString() }
+        }
+
+        edtTarea = EditText(this).apply {
+            hint = ClaveRecordatorioManager.obtenerInstruccion()
+            setTextColor(Color.parseColor("#1A1A1A"))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+
+        btnMicrofono = ImageView(this).apply {
+            setImageResource(android.R.drawable.ic_btn_speak_now)
+            setColorFilter(Color.parseColor("#757575"))
+            setPadding(16, 16, 16, 16)
+        }
+
+        txtConsola = TextView(this).apply {
+            text = "¡Qué gusto saludarte! En qué puedo acompañarte hoy."
+            setTextColor(Color.parseColor("#1A1A1A"))
+            textSize = 15f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(16, 24, 16, 24)
+        }
+
+        btnRegalo = Button(this).apply {
+            text = "🎁 Abrir Regalo Diario"
+            setTextColor(Color.parseColor("#1A1A1A"))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setBackgroundColor(Color.parseColor("#33FFFFFF")) // Marca de agua
+            setOnClickListener { RegaloAmorPropioDialog(this@MainActivity, prefs).show() }
+        }
+
+        btnLecturas = Button(this).apply {
+            text = "📖 Lectura de Familia y Perdón"
+            setTextColor(Color.parseColor("#1A1A1A"))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setBackgroundColor(Color.parseColor("#33FFFFFF")) // Marca de agua
+            setOnClickListener { cargarLecturaFamilia() }
+        }
+
+        btnBuscador = Button(this).apply {
+            text = "🌐 Buscar con Baidu / Red"
+            setTextColor(Color.parseColor("#1A1A1A"))
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setBackgroundColor(Color.parseColor("#33FFFFFF")) // Marca de agua
+            setOnClickListener {
+                val q = edtTarea.text.toString()
+                if (q.isNotBlank()) ejecutarBusqueda(q)
+            }
+        }
+
+        // Ensamblar vistas
+        rootLayout.addView(edtNombreIA)
+        rootLayout.addView(edtNombreUsuario)
+        rootLayout.addView(edtTarea)
+        rootLayout.addView(btnMicrofono)
+        rootLayout.addView(btnRegalo)
+        rootLayout.addView(btnLecturas)
+        rootLayout.addView(btnBuscador)
+        rootLayout.addView(txtConsola)
+        setContentView(rootLayout)
+
+        // Inicializar Gestor de Voz seguro
+        vozManager = VozManager(this, btnMicrofono) { textoVoz ->
+            procesarEntradaTextoOVoz(textoVoz)
+        }
+        btnMicrofono.setOnClickListener { vozManager.empezarAEscuchar() }
+
+        // Programar Tareas en Segundo Plano
+        programarTrabajadores()
+    }
+
+    private fun procesarEntradaTextoOVoz(entrada: String) {
+        val saludo = "¡Qué gusto saludarte! "
+        if (entrada.startsWith("anota", ignoreCase = true) || entrada.startsWith("recordar", ignoreCase = true)) {
+            val tareaLimpia = entrada.replaceFirst("(?i)anota|recordar".toRegex(), "").trim()
+            lifecycleScope.launch(Dispatchers.IO) {
+                db.tareaDao().insertarTarea(TareaEntity(descripcion = tareaLimpia))
+                withContext(Dispatchers.Main) {
+                    txtConsola.text = "$saludo He registrado en tu rutina: \"$tareaLimpia\"."
+                }
+            }
+        } else {
+            txtConsola.text = "$saludo He escuchado: \"$entrada\"."
+        }
+    }
+
+    private fun cargarLecturaFamilia() {
+        lifecycleScope.launch {
+            val lectura = withContext(Dispatchers.IO) {
+                db.lecturaFamiliaDao().obtenerPorCategoria("HERMANDAD")
+            }
+            if (lectura != null) {
+                // Traduce al idioma actual seleccionado (Ejemplo: K'iche' o Chino)
+                val tituloTraducido = TraductorUniversalManager.traducir(lectura.titulo, IdiomaDestino.MAYA_KICHE)
+                val contenidoTraducido = TraductorUniversalManager.traducir(lectura.contenido, IdiomaDestino.MAYA_KICHE)
+                txtConsola.text = "📚 $tituloTraducido\n\n$contenidoTraducido"
+            }
+        }
+    }
+
+    private fun ejecutarBusqueda(query: String) {
+        lifecycleScope.launch {
+            txtConsola.text = "Consultando redes..."
+            val resultado = baiduClient.search(query)
+            txtConsola.text = "Resultado:\n$resultado"
+        }
+    }
+
+    private fun programarTrabajadores() {
+        val workManager = WorkManager.getInstance(this)
+
+        val reqClimaRutina = PeriodicWorkRequestBuilder<RutinaYClimaWorker>(5, TimeUnit.HOURS).build()
+        workManager.enqueueUniquePeriodicWork("RutinaYClima5h", ExistingPeriodicWorkPolicy.KEEP, reqClimaRutina)
+
+        val reqCapsulas = PeriodicWorkRequestBuilder<CapsulasWorker>(4, TimeUnit.HOURS).build()
+        workManager.enqueueUniquePeriodicWork("Capsulas4h", ExistingPeriodicWorkPolicy.KEEP, reqCapsulas)
+
+        val reqTerapias = PeriodicWorkRequestBuilder<TerapiasWorker>(3, TimeUnit.DAYS).build()
+        workManager.enqueueUniquePeriodicWork("Terapias3d", ExistingPeriodicWorkPolicy.KEEP, reqTerapias)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        vozManager.destruir()
+    }
+}

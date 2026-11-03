@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Pasarela de Pago Segura</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #0f172a; /* Fondo azul platinado oscuro */
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .tarjeta-contenedor {
+            background-color: #1e293b; /* Cuadro en azul platinado */
+            border: 1.5px solid #475569; /* Borde metálico platinado */
+            border-radius: 18px;
+            padding: 24px;
+            text-align: center;
+            max-width: 380px;
+            width: 100%;
+            box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+            margin-top: 10px;
+            box-sizing: border-box;
+            display: none;
+        }
+        /* Estilos Especiales Exclusivos para la sección de Donar: Sobresale con color cálido y franjas de amistad */
+        .tarjeta-donacion {
+            background-color: #381a36; /* Color cálido afecto ciruela/mora */
+            border: 2px solid #f59e0b; /* Borde dorado resplandeciente */
+            box-shadow: 0 12px 32px rgba(245, 158, 11, 0.25);
+        }
+        /* Franjas decorativas de amistad */
+        .franjas-amistad {
+            height: 6px;
+            width: 100%;
+            border-radius: 3px;
+            background: linear-gradient(90deg, #FBBF24 0%, #F472B6 20%, #A78BFA 40%, #38BDF8 60%, #34D399 80%, #FB923C 100%);
+            margin-bottom: 16px;
+        }
+        .franjas-amistad-pie {
+            height: 4px;
+            width: 100%;
+            border-radius: 2px;
+            background: linear-gradient(90deg, #38BDF8 0%, #34D399 33%, #FBBF24 66%, #F472B6 100%);
+            margin-top: 18px;
+        }
+        .insignia-amistad {
+            display: inline-block;
+            background-color: #f59e0b;
+            color: #0f172a;
+            font-size: 0.72rem;
+            font-weight: bold;
+            padding: 3px 8px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            letter-spacing: 0.5px;
+        }
+        h2 { color: #38bdf8; font-size: 1.4rem; margin-top: 0; margin-bottom: 10px; }
+        .titulo-donar { color: #f472b6; font-size: 1.35rem; }
+        p { color: #cbd5e1; font-size: 0.95rem; line-height: 1.5; margin-bottom: 20px; }
+        .paypal-box { width: 100%; margin-top: 15px; min-height: 50px; }
+        
+        .donation-form {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .donation-form input[type="image"] {
+            max-width: 180px;
+            filter: drop-shadow(0px 4px 8px rgba(0, 0, 0, 0.5));
+            transition: transform 0.2s;
+        }
+        .donation-form input[type="image"]:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- PANTALLA A: CLUB DE CONSULTORÍA (Para el bloqueo de Diario y Chat) -->
+    <div id="seccion-consultoria" class="tarjeta-contenedor">
+        <h2>¡Enhorabuena! 🎉</h2>
+        <p>Has completado tus pruebas iniciales de desahogo. Accede de forma ilimitada al <strong>Club de Consultoría Ilimitada</strong> y continúa tu proceso de acompañamiento.</p>
+        <div id="paypal-container-PXJM3VAXNCLQA" class="paypal-box"></div>
+    </div>
+
+    <!-- PANTALLA B: TRÁMITE DE DIPLOMAS -->
+    <div id="seccion-diplomas" class="tarjeta-contenedor">
+        <h2>Felicidades por tu Avance 📜</h2>
+        <p>Has completado una etapa clave. Solicita tu diploma certificado oficial aquí y lo procesaremos directamente para enviarlo a tu correo electrónico.</p>
+        <div id="paypal-container-V5RU7AKRHPB6L" class="paypal-box"></div>
+    </div>
+
+    <!-- PANTALLA C: DONACIONES (Con fondo cálido diferenciado y franjas de amistad) -->
+    <div id="seccion-donaciones" class="tarjeta-contenedor tarjeta-donacion">
+        <div class="franjas-amistad"></div>
+        <div class="insignia-amistad">🤝 AMISTAD &amp; SOLIDARIDAD 💖</div>
+        <h2 class="titulo-donar">Aportación Voluntaria Libre ❤️</h2>
+        <p>Tu apoyo económico voluntario está destinado exclusivamente al soporte técnico, mantenimiento de servidores y el financiamiento para el desarrollo de futuras herramientas gratuitas dentro de esta plataforma. ¡Gracias por ayudarnos a mantener este entorno seguro!</p>
+        <form class="donation-form" action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
+            <input type="hidden" name="cmd" value="_s-xclick" />
+            <input type="hidden" name="hosted_button_id" value="4E83JUKUBJHGW" />
+            <input type="image" src="https://www.paypalobjects.com/es_XC/i/btn/btn_donateCC_LG.gif" border="0" name="submit" title="PayPal - Soporta nuestro desarrollo" alt="Botón Donar con PayPal" />
+            <img alt="" border="0" src="https://www.paypal.com/es_XC/i/scr/pixel.gif" width="1" height="1" />
+        </form>
+        <div class="franjas-amistad-pie"></div>
+    </div>
+
+    <!-- SCRIPT DE INICIALIZACIÓN DE PAYPAL -->
+    <script src="https://www.paypal.com/sdk/js?client-id=BAA2Yf-lY_s22G31gVzB9U4-kE0jM5_o3t4bL6xK6e_z9P8Q7W1&components=hosted-buttons&disable-funding=venmo&currency=USD"></script>
+
+    <script>
+        try {
+            if (window.paypal && typeof paypal.HostedButtons === 'function') {
+                paypal.HostedButtons({ hostedButtonId: "PXJM3VAXNCLQA" }).render("#paypal-container-PXJM3VAXNCLQA");
+                paypal.HostedButtons({ hostedButtonId: "V5RU7AKRHPB6L" }).render("#paypal-container-V5RU7AKRHPB6L");
+            }
+        } catch(e) {
+            console.error("PayPal hosted buttons error:", e);
+        }
+
+        // Esta función la activa Android Studio para decidir qué pantalla mostrar
+        function cambiarPantalla(pantalla) {
+            var sc = document.getElementById('seccion-consultoria');
+            var sd = document.getElementById('seccion-diplomas');
+            var sdon = document.getElementById('seccion-donaciones');
+
+            if (sc) sc.style.display = 'none';
+            if (sd) sd.style.display = 'none';
+            if (sdon) sdon.style.display = 'none';
+
+            if (pantalla === 'consultoria' && sc) {
+                sc.style.display = 'block';
+            } else if (pantalla === 'diploma' && sd) {
+                sd.style.display = 'block';
+            } else if (pantalla === 'donacion' && sdon) {
+                sdon.style.display = 'block';
+            }
+        }
+    </script>
+</body>
+</html>
